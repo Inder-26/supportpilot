@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+langgraph
+langchain-core
+groq
+google-genai
+chromadb
+pydantic
+python-dotenv
+aiofiles

@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SupportPilot</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f5f5f5; color: #1a1a1a; }
+  header { background: #1e1e2e; color: #fff; padding: 16px 24px; display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 20px; font-weight: 600; }
+  header span.sub { font-size: 12px; opacity: 0.5; }
+  nav { display: flex; gap: 0; margin-left: auto; }
+  nav button { background: transparent; border: none; color: #fff; padding: 8px 18px; cursor: pointer; font-size: 13px; opacity: 0.6; border-bottom: 2px solid transparent; }
+  nav button.active { opacity: 1; border-bottom: 2px solid #7c6ff7; }
+  .page { display: none; }
+  .page.active { display: block; }
+  .container { max-width: 1100px; margin: 28px auto; padding: 0 20px; }
+
+  /* form */
+  .form-card { background: #fff; border-radius: 12px; border: 1px solid #e5e5e5; padding: 32px; max-width: 600px; margin: 0 auto; }
+  .form-card h2 { font-size: 18px; font-weight: 600; margin-bottom: 6px; }
+  .form-card p.sub { font-size: 13px; color: #666; margin-bottom: 24px; }
+  .field { margin-bottom: 18px; }
+  .field label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: #333; }
+  .field input, .field textarea, .field select { width: 100%; padding: 10px 14px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px; font-family: inherit; transition: border-color 0.15s; background: #fafafa; }
+  .field input:focus, .field textarea:focus, .field select:focus { outline: none; border-color: #7c6ff7; background: #fff; }
+  .field textarea { resize: vertical; min-height: 120px; }
+  .submit-btn { width: 100%; padding: 12px; background: #1e1e2e; color: #fff; border: none; border-radius: 8px; font-size: 15px; font-weight: 500; cursor: pointer; transition: opacity 0.15s; }
+  .submit-btn:hover { opacity: 0.85; }
+  .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .toast { display: none; margin-top: 16px; padding: 14px 18px; border-radius: 8px; font-size: 13px; font-weight: 500; }
+  .toast.success { background: #d1fae5; color: #065f46; display: block; }
+  .toast.error   { background: #fee2e2; color: #991b1b; display: block; }
+
+  /* dashboard */
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 24px; }
+  .stat { background: #fff; border-radius: 10px; padding: 18px; border: 1px solid #e5e5e5; }
+  .stat .label { font-size: 12px; color: #888; margin-bottom: 4px; }
+  .stat .value { font-size: 30px; font-weight: 600; }
+  .filters { display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap; align-items: center; }
+  .filters button { padding: 7px 14px; border-radius: 6px; border: 1px solid #ddd; font-size: 13px; cursor: pointer; background: #fff; }
+  .filters button.active { background: #1e1e2e; color: #fff; border-color: #1e1e2e; }
+  .filters select { padding: 7px 14px; border-radius: 6px; border: 1px solid #ddd; font-size: 13px; background: #fff; cursor: pointer; }
+  table { width: 100%; background: #fff; border-radius: 10px; border: 1px solid #e5e5e5; border-collapse: collapse; overflow: hidden; }
+  th { background: #f9f9f9; text-align: left; padding: 10px 16px; font-size: 12px; color: #777; font-weight: 500; border-bottom: 1px solid #e5e5e5; }
+  td { padding: 11px 16px; font-size: 13px; border-bottom: 1px solid #f0f0f0; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr.ticket-row { cursor: pointer; }
+  tr.ticket-row:hover td { background: #f5f3ff; }
+  tr.ticket-row.selected td { background: #ede9fe; }
+  .badge { display: inline-block; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 500; }
+  .badge.resolved  { background: #d1fae5; color: #065f46; }
+  .badge.escalated { background: #fee2e2; color: #991b1b; }
+  .badge.pending   { background: #fef3c7; color: #92400e; }
+  .badge.urgent { background: #fee2e2; color: #991b1b; }
+  .badge.high   { background: #ffedd5; color: #9a3412; }
+  .badge.medium { background: #fef9c3; color: #854d0e; }
+  .badge.low    { background: #f0fdf4; color: #166534; }
+  .conf.good { color: #16a34a; font-weight: 600; }
+  .conf.mid  { color: #d97706; font-weight: 600; }
+  .conf.bad  { color: #dc2626; font-weight: 600; }
+  .empty { text-align: center; padding: 52px; color: #aaa; font-size: 14px; }
+  .refresh-time { margin-left: auto; font-size: 12px; color: #aaa; }
+
+  /* ticket detail panel */
+  .detail-panel { background: #fff; border-radius: 10px; border: 1px solid #e5e5e5; margin-top: 16px; overflow: hidden; display: none; }
+  .detail-panel.show { display: block; }
+  .detail-header { padding: 16px 20px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; gap: 12px; }
+  .detail-header h3 { font-size: 15px; font-weight: 600; flex: 1; }
+  .detail-close { background: none; border: none; font-size: 18px; cursor: pointer; color: #888; padding: 4px 8px; border-radius: 4px; }
+  .detail-close:hover { background: #f0f0f0; }
+  .detail-body { padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  .detail-section h4 { font-size: 12px; font-weight: 500; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px; }
+  .detail-meta { display: flex; flex-direction: column; gap: 8px; }
+  .detail-meta-row { display: flex; justify-content: space-between; font-size: 13px; }
+  .detail-meta-row span:first-child { color: #888; }
+  .detail-meta-row span:last-child { font-weight: 500; }
+  .detail-reply { background: #f8f7ff; border: 1px solid #ede9fe; border-radius: 8px; padding: 14px 16px; font-size: 13px; line-height: 1.7; color: #1a1a1a; white-space: pre-wrap; grid-column: 1 / -1; }
+  .detail-reply.escalated-reply { background: #fff5f5; border-color: #fecaca; }
+  .detail-reply.no-reply { color: #aaa; font-style: italic; }
+  .escalation-note { background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 12px 16px; font-size: 13px; color: #9a3412; grid-column: 1 / -1; }
+  .escalation-note strong { display: block; margin-bottom: 4px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>SupportPilot</h1>
+  <span class="sub">AI Customer Support</span>
+  <nav>
+    <button class="active" onclick="showPage('submit', this)">Submit Ticket</button>
+    <button onclick="showPage('dashboard', this)">Dashboard</button>
+  </nav>
+</header>
+
+<!-- SUBMIT PAGE -->
+<div id="page-submit" class="page active">
+  <div class="container">
+    <div class="form-card">
+      <h2>Submit a support ticket</h2>
+      <p class="sub">Fill in your details and our AI will respond within seconds.</p>
+      <div class="field"><label>Your email</label><input type="email" id="f-email" placeholder="you@example.com"/></div>
+      <div class="field"><label>Subject</label><input type="text" id="f-subject" placeholder="e.g. Where is my order ORD-1002?"/></div>
+      <div class="field"><label>Message</label><textarea id="f-body" placeholder="Describe your issue in detail..."></textarea></div>
+      <div class="field"><label>Source</label>
+        <select id="f-source">
+          <option value="form">Web Form</option>
+          <option value="email">Email</option>
+          <option value="chat">Chat</option>
+          <option value="slack">Slack</option>
+        </select>
+      </div>
+      <button class="submit-btn" id="submit-btn" onclick="submitTicket()">Submit Ticket</button>
+      <div class="toast" id="toast"></div>
+    </div>
+  </div>
+</div>
+
+<!-- DASHBOARD PAGE -->
+<div id="page-dashboard" class="page">
+  <div class="container">
+    <div class="stats">
+      <div class="stat"><div class="label">Total tickets</div><div class="value" id="s-total">—</div></div>
+      <div class="stat"><div class="label">Resolved</div><div class="value" id="s-resolved" style="color:#16a34a">—</div></div>
+      <div class="stat"><div class="label">Escalated</div><div class="value" id="s-escalated" style="color:#dc2626">—</div></div>
+      <div class="stat"><div class="label">Pending</div><div class="value" id="s-pending" style="color:#d97706">—</div></div>
+    </div>
+
+    <div class="filters">
+      <button class="active" onclick="filterStatus(null,this)">All</button>
+      <button onclick="filterStatus('resolved',this)">Resolved</button>
+      <button onclick="filterStatus('escalated',this)">Escalated</button>
+      <button onclick="filterStatus('pending',this)">Pending</button>
+      <select onchange="filterPriority(this.value)">
+        <option value="">All priorities</option>
+        <option value="urgent">Urgent</option>
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
+      <button onclick="loadTickets()" style="margin-left:auto">Refresh</button>
+      <span class="refresh-time" id="last-refresh"></span>
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Ticket ID</th><th>Subject</th><th>Category</th>
+          <th>Priority</th><th>Status</th><th>Confidence</th><th>Created</th>
+        </tr>
+      </thead>
+      <tbody id="ticket-table"></tbody>
+    </table>
+
+    <!-- DETAIL PANEL -->
+    <div class="detail-panel" id="detail-panel">
+      <div class="detail-header">
+        <h3 id="dp-title">Ticket detail</h3>
+        <code id="dp-id" style="font-size:12px;color:#888"></code>
+        <button class="detail-close" onclick="closeDetail()">✕</button>
+      </div>
+      <div class="detail-body">
+        <div class="detail-section">
+          <h4>Classification</h4>
+          <div class="detail-meta">
+            <div class="detail-meta-row"><span>Category</span><span id="dp-cat">—</span></div>
+            <div class="detail-meta-row"><span>Priority</span><span id="dp-pri">—</span></div>
+            <div class="detail-meta-row"><span>Sentiment</span><span id="dp-sent">—</span></div>
+            <div class="detail-meta-row"><span>Confidence</span><span id="dp-conf">—</span></div>
+            <div class="detail-meta-row"><span>Retries</span><span id="dp-retry">—</span></div>
+          </div>
+        </div>
+        <div class="detail-section">
+          <h4>Customer message</h4>
+          <div id="dp-body" style="font-size:13px;line-height:1.6;color:#444;background:#f9f9f9;border-radius:8px;padding:12px"></div>
+        </div>
+        <div class="detail-section" style="grid-column:1/-1" id="dp-escalation-wrap" style="display:none">
+          <div class="escalation-note" id="dp-escalation">
+            <strong>⚠ Escalated to human</strong>
+            <span id="dp-escalation-reason"></span>
+          </div>
+        </div>
+        <div class="detail-section" style="grid-column:1/-1">
+          <h4 id="dp-reply-label">AI reply sent to customer</h4>
+          <div class="detail-reply" id="dp-reply"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentStatus = null, currentPriority = '', selectedId = null;
+let allTickets = [];
+
+async function submitTicket() {
+  const email=document.getElementById('f-email').value.trim();
+  const subject=document.getElementById('f-subject').value.trim();
+  const body=document.getElementById('f-body').value.trim();
+  const source=document.getElementById('f-source').value;
+  const toast=document.getElementById('toast');
+  const btn=document.getElementById('submit-btn');
+  toast.className='toast'; toast.textContent='';
+  if(!email||!subject||!body){toast.className='toast error';toast.textContent='Please fill in all fields.';return;}
+  btn.disabled=true; btn.textContent='Submitting...';
+  try{
+    const res=await fetch('/api/ticket',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({customer_email:email,subject,body,source})});
+    const data=await res.json();
+    if(res.ok){
+      toast.className='toast success';
+      toast.textContent=`Ticket submitted! ID: ${data.ticket_id} — AI is processing your request.`;
+      document.getElementById('f-email').value='';
+      document.getElementById('f-subject').value='';
+      document.getElementById('f-body').value='';
+    } else {
+      toast.className='toast error';toast.textContent=`Error: ${data.detail||data.error||'Submission failed'}`;
+    }
+  } catch(e){toast.className='toast error';toast.textContent='Network error — is the server running?';}
+  btn.disabled=false; btn.textContent='Submit Ticket';
+}
+
+function showPage(name,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('nav button').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  btn.classList.add('active');
+  if(name==='dashboard') loadTickets();
+}
+
+async function loadStats(tickets){
+  document.getElementById('s-total').textContent=tickets.length;
+  document.getElementById('s-resolved').textContent=tickets.filter(t=>t.status==='resolved').length;
+  document.getElementById('s-escalated').textContent=tickets.filter(t=>t.status==='escalated').length;
+  document.getElementById('s-pending').textContent=tickets.filter(t=>t.status==='pending').length;
+}
+
+async function loadTickets(){
+  const params=new URLSearchParams({limit:200});
+  if(currentStatus) params.set('status',currentStatus);
+  if(currentPriority) params.set('priority',currentPriority);
+  const data=await fetch('/api/tickets?'+params).then(r=>r.json()).catch(()=>({tickets:[]}));
+  allTickets=data.tickets||[];
+  const tbody=document.getElementById('ticket-table');
+  if(!allTickets.length){tbody.innerHTML='<tr><td colspan="7" class="empty">No tickets found</td></tr>';return;}
+  tbody.innerHTML=allTickets.map(t=>{
+    const conf=t.confidence!=null?t.confidence.toFixed(2):'—';
+    const confClass=t.confidence>=0.8?'good':t.confidence>=0.5?'mid':'bad';
+    const date=(t.created_at||'').substring(0,16).replace('T',' ');
+    const sel=t.ticket_id===selectedId?'selected':'';
+    return `<tr class="ticket-row ${sel}" onclick="showDetail('${t.ticket_id}')">
+      <td><code style="font-size:12px">${t.ticket_id}</code></td>
+      <td>${t.subject.substring(0,55)}${t.subject.length>55?'…':''}</td>
+      <td>${t.category||'—'}</td>
+      <td><span class="badge ${t.priority||''}">${t.priority||'—'}</span></td>
+      <td><span class="badge ${t.status}">${t.status}</span></td>
+      <td><span class="conf ${confClass}">${conf}</span></td>
+      <td>${date}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('last-refresh').textContent='Last refreshed: '+new Date().toLocaleTimeString();
+  await loadStats(allTickets);
+}
+
+async function showDetail(ticketId){
+  selectedId=ticketId;
+  document.querySelectorAll('.ticket-row').forEach(r=>r.classList.remove('selected'));
+  event.currentTarget.classList.add('selected');
+
+  const res=await fetch('/api/ticket/'+ticketId);
+  const t=await res.json();
+
+  document.getElementById('dp-title').textContent=t.subject;
+  document.getElementById('dp-id').textContent=t.ticket_id;
+  document.getElementById('dp-cat').textContent=t.category||'—';
+  document.getElementById('dp-pri').innerHTML=t.priority?`<span class="badge ${t.priority}">${t.priority}</span>`:'—';
+  document.getElementById('dp-sent').textContent=t.sentiment||'—';
+  document.getElementById('dp-conf').textContent=t.confidence!=null?t.confidence.toFixed(2):'—';
+  document.getElementById('dp-retry').textContent=(t.retry_count||0)+' / 2';
+  document.getElementById('dp-body').textContent=t.body||'—';
+
+  const escalWrap=document.getElementById('dp-escalation-wrap');
+  const replyDiv=document.getElementById('dp-reply');
+  const replyLabel=document.getElementById('dp-reply-label');
+
+  if(t.status==='escalated'){
+    escalWrap.style.display='block';
+    document.getElementById('dp-escalation-reason').textContent=t.escalation_reason||'Unknown reason';
+    replyLabel.textContent='Draft attempted by AI (not sent)';
+    replyDiv.className='detail-reply escalated-reply';
+    replyDiv.textContent=t.draft_reply||'No draft was produced.';
+  } else {
+    escalWrap.style.display='none';
+    replyLabel.textContent='AI reply sent to customer';
+    replyDiv.className='detail-reply';
+    replyDiv.textContent=t.draft_reply||'Reply not available.';
+  }
+
+  document.getElementById('detail-panel').classList.add('show');
+  document.getElementById('detail-panel').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+
+function closeDetail(){
+  document.getElementById('detail-panel').classList.remove('show');
+  selectedId=null;
+  document.querySelectorAll('.ticket-row').forEach(r=>r.classList.remove('selected'));
+}
+
+function filterStatus(status,btn){
+  currentStatus=status;
+  document.querySelectorAll('.filters button').forEach(b=>b.classList.remove('active'));
+  btn.classList.add('active');
+  loadTickets();
+}
+
+function filterPriority(val){currentPriority=val;loadTickets();}
+
+setInterval(()=>{
+  if(document.getElementById('page-dashboard').classList.contains('active')) loadTickets();
+},15000);
+</script>
+</body>
+</html>
