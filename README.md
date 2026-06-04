@@ -72,7 +72,32 @@ supportpilot/
 
 ## Architecture
 
-![SupportPilot Architecture](architecture.png)
+![SupportPilot Architecture](/docs/architecture.png)
+
+---
+
+## Demo And Screenshots
+
+### Demo Video
+
+<video controls width="100%" poster="./docs/dashboard.png">
+  <source src="./docs/cuperpilot_demo_video.mp4" type="video/mp4">
+  Your browser does not support the video tag.
+</video>
+
+### Dashboard
+
+![SupportPilot Dashboard](/docs/dashboard.png)
+
+### Ticket Submission
+
+![Submit a support ticket](/docs/submit_a_support_ticket.png)
+
+### Escalated Ticket
+
+![Escalated ticket view](/docs/Escalated.png)
+
+---
 
 ## Agent Flow
 
