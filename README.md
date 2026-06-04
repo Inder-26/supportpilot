@@ -4,6 +4,31 @@ An AI-powered customer support automation system built with a multi-agent archit
 
 ---
 
+## 🎥 Demo Video
+
+https://github.com/user-attachments/assets/37ff747c-14e6-479f-bef9-af3f625d63c9
+
+---
+
+## 📑 Table of Contents
+
+- [What it does](#what-it-does)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Architecture](#architecture)
+- [Screenshots](#screenshots)
+- [Agent Flow](#agent-flow)
+- [Setup](#setup)
+- [Usage](#usage)
+- [Test Queries](#test-queries)
+- [Logging](#logging)
+- [Exception Handling](#exception-handling)
+- [Cost](#cost)
+- [Potential Improvements](#potential-improvements)
+- [Author](#author)
+
+---
+
 ## What it does
 
 A customer submits a support ticket → the system automatically:
@@ -76,11 +101,7 @@ supportpilot/
 
 ---
 
-## Demo And Screenshots
-
-### Demo Video
-
-https://github.com/user-attachments/assets/37ff747c-14e6-479f-bef9-af3f625d63c9
+## Screenshots
 
 ### Dashboard
 
