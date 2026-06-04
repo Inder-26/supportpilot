@@ -80,10 +80,7 @@ supportpilot/
 
 ### Demo Video
 
-<video controls width="100%" poster="./docs/dashboard.png">
-  <source src="./docs/cuperpilot_demo_video.mp4" type="video/mp4">
-  Your browser does not support the video tag.
-</video>
+https://github.com/user-attachments/assets/37ff747c-14e6-479f-bef9-af3f625d63c9
 
 ### Dashboard
 
