@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support Ticket Classifier</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%23C15F3C'/%3E%3Ctext x='16' y='22' font-size='17' font-family='Georgia,serif' fill='%23FBF9F4' text-anchor='middle'%3ET%3C/text%3E%3C/svg%3E">
+<style>
+  :root {
+    --bg: #F0EEE6;
+    --card: #FAFAF7;
+    --ink: #3D3929;
+    --ink-soft: #6B6656;
+    --border: #E1DFD5;
+    --accent: #C15F3C;
+    --accent-soft: #F1E0D6;
+    --accent-dark: #A84E30;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    font-family: "Georgia", "Iowan Old Style", "Times New Roman", serif;
+    display: flex;
+    justify-content: center;
+    margin: 0;
+    padding: 56px 20px;
+    color: var(--ink);
+    background: var(--bg);
+  }
+
+  .card {
+    width: 100%;
+    max-width: 620px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 18px;
+    box-shadow: 0 4px 18px rgba(61, 57, 41, 0.06);
+    padding: 36px 40px 40px;
+  }
+
+  h1 {
+    font-size: 1.7rem;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    margin: 0 0 6px;
+  }
+
+  p.sub {
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    color: var(--ink-soft);
+    margin: 0 0 28px;
+    font-size: 0.95rem;
+  }
+
+  label {
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    display: block;
+    margin-bottom: 6px;
+  }
+
+  textarea {
+    width: 100%;
+    min-height: 130px;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    font-size: 0.98rem;
+    line-height: 1.5;
+    padding: 14px 16px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    resize: vertical;
+    background: var(--bg);
+    color: var(--ink);
+  }
+
+  textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+  }
+
+  .hint {
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    font-size: 0.75rem;
+    color: var(--ink-soft);
+    margin-top: 6px;
+  }
+
+  .hint kbd {
+    font-family: inherit;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 1px 5px;
+  }
+
+  button#classifyBtn {
+    margin-top: 12px;
+    padding: 11px 22px;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    font-size: 0.95rem;
+    font-weight: 500;
+    border: none;
+    border-radius: 10px;
+    background: var(--accent);
+    color: #FBF9F4;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 9px;
+    transition: background 0.15s ease;
+  }
+
+  button#classifyBtn:hover:not(:disabled) { background: var(--accent-dark); }
+  button#classifyBtn:disabled { background: #D8B6A6; cursor: default; }
+
+  .spinner {
+    width: 14px;
+    height: 14px;
+    border: 2px solid rgba(251, 249, 244, 0.4);
+    border-top-color: #FBF9F4;
+    border-radius: 50%;
+    display: none;
+    animation: spin 0.7s linear infinite;
+  }
+
+  button#classifyBtn.loading .spinner { display: inline-block; }
+  button#classifyBtn.loading .btn-label::after { content: "Classifying\2026"; }
+  button#classifyBtn.loading .btn-label { font-size: 0; }
+  button#classifyBtn.loading .btn-label::after { font-size: 0.95rem; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  #result {
+    margin-top: 24px;
+    padding: 20px 22px;
+    border-radius: 12px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    display: none;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+
+  #result.visible { display: block; animation: fadeIn 0.25s ease; }
+
+  #result .badge {
+    display: inline-block;
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 5px 14px;
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent-dark);
+  }
+
+  #result .badge.badge-login   { background: #DCE6F5; color: #35578C; }
+  #result .badge.badge-payment { background: #DCEEDC; color: #2F6B4F; }
+  #result .badge.badge-account { background: #E8DFF5; color: #6B4A9E; }
+  #result .badge.badge-delivery{ background: #D9EEEC; color: #2A7A72; }
+  #result .badge.badge-technical{ background: #F5DEDC; color: #B23B2E; }
+  #result .badge.badge-others  { background: #E7E5DD; color: #6B6656; }
+
+  #result .confidence-row {
+    margin-top: 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  #result .confidence-label {
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    white-space: nowrap;
+  }
+
+  #result .bar-track {
+    flex: 1;
+    height: 6px;
+    border-radius: 999px;
+    background: var(--border);
+    overflow: hidden;
+  }
+
+  #result .bar-fill {
+    height: 100%;
+    background: var(--accent);
+    border-radius: 999px;
+    transition: width 0.3s ease;
+  }
+
+  #result .confidence-value {
+    font-size: 0.8rem;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+  }
+
+  #error {
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+    color: #A84E30;
+    background: var(--accent-soft);
+    padding: 12px 16px;
+    border-radius: 10px;
+    margin-top: 16px;
+    font-size: 0.9rem;
+    display: none;
+  }
+
+  #error.visible { display: block; animation: fadeIn 0.25s ease; }
+
+  .examples {
+    margin-top: 32px;
+    font-family: -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  }
+
+  .examples .examples-label {
+    font-size: 0.8rem;
+    color: var(--ink-soft);
+    margin-bottom: 8px;
+  }
+
+  .examples button {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--ink);
+    font-size: 0.82rem;
+    padding: 7px 13px;
+    margin: 0 8px 8px 0;
+    border-radius: 999px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  }
+
+  .examples button:hover {
+    border-color: var(--accent);
+    color: var(--accent-dark);
+  }
+
+  .examples button.active {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent-dark);
+  }
+
+  @media (max-width: 480px) {
+    body { padding: 32px 12px; }
+    .card { padding: 26px 22px 30px; border-radius: 14px; }
+  }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Support Ticket Classifier</h1>
+  <p class="sub">Paste a customer support ticket and classify it into a category.</p>
+
+  <label for="ticketText">Ticket text</label>
+  <textarea id="ticketText" placeholder="e.g. I cannot login to my account."></textarea>
+  <div class="hint"><kbd>Ctrl</kbd>/<kbd>Cmd</kbd> + <kbd>Enter</kbd> to classify</div>
+
+  <button id="classifyBtn">
+    <span class="spinner"></span>
+    <span class="btn-label">Classify</span>
+  </button>
+
+  <div id="result">
+    <span class="badge" id="resultCategory"></span>
+    <div class="confidence-row">
+      <span class="confidence-label">Confidence</span>
+      <div class="bar-track"><div class="bar-fill" id="confidenceBar"></div></div>
+      <span class="confidence-value" id="confidenceValue"></span>
+    </div>
+  </div>
+  <div id="error"></div>
+
+  <div class="examples">
+    <div class="examples-label">Try an example</div>
+    <button data-text="I cannot login to my account.">Login Issue</button>
+    <button data-text="Payment was deducted twice.">Payment</button>
+    <button data-text="How can I change my password?">Account</button>
+    <button data-text="My order hasn't arrived.">Delivery</button>
+    <button data-text="App crashes after opening.">Technical Issue</button>
+  </div>
+</div>
+
+<script>
+const textarea = document.getElementById('ticketText');
+const btn = document.getElementById('classifyBtn');
+const resultBox = document.getElementById('result');
+const resultCategory = document.getElementById('resultCategory');
+const confidenceBar = document.getElementById('confidenceBar');
+const confidenceValue = document.getElementById('confidenceValue');
+const errorBox = document.getElementById('error');
+const exampleButtons = document.querySelectorAll('.examples button');
+
+const BADGE_CLASSES = {
+  'Login Issue': 'badge-login',
+  'Payment': 'badge-payment',
+  'Account': 'badge-account',
+  'Delivery': 'badge-delivery',
+  'Technical Issue': 'badge-technical',
+  'Others': 'badge-others',
+};
+
+function updateActiveExample() {
+  const current = textarea.value.trim();
+  exampleButtons.forEach(exampleBtn => {
+    exampleBtn.classList.toggle('active', exampleBtn.dataset.text === current);
+  });
+}
+
+exampleButtons.forEach(exampleBtn => {
+  exampleBtn.addEventListener('click', () => {
+    textarea.value = exampleBtn.dataset.text;
+    updateActiveExample();
+    classify();
+  });
+});
+
+textarea.addEventListener('input', updateActiveExample);
+
+textarea.addEventListener('keydown', (e) => {
+  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+    e.preventDefault();
+    classify();
+  }
+});
+
+btn.addEventListener('click', classify);
+
+async function classify() {
+  const text = textarea.value.trim();
+  if (!text) return;
+
+  btn.disabled = true;
+  btn.classList.add('loading');
+  errorBox.classList.remove('visible');
+  resultBox.classList.remove('visible');
+
+  try {
+    const res = await fetch('/classify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `Request failed (${res.status})`);
+    }
+    const data = await res.json();
+    resultCategory.textContent = data.category;
+    resultCategory.className = 'badge ' + (BADGE_CLASSES[data.category] || 'badge-others');
+    const pct = Math.round(data.confidence * 100);
+    confidenceBar.style.width = `${pct}%`;
+    confidenceValue.textContent = data.confidence.toFixed(2);
+    resultBox.classList.add('visible');
+  } catch (err) {
+    errorBox.textContent = err.message;
+    errorBox.classList.add('visible');
+  } finally {
+    btn.disabled = false;
+    btn.classList.remove('loading');
+  }
+}
+</script>
+</body>
+</html>

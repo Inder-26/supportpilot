@@ -1,153 +1,123 @@
-# SupportPilot 🎯
+# Support Ticket Classifier
 
-An AI-powered customer support automation system built with a multi-agent architecture. Tickets come in, AI handles them — classifies, searches a knowledge base, drafts a reply, and either sends it automatically or escalates to a human based on confidence.
+A lightweight AI-powered service that classifies free-text customer support tickets
+into a fixed category, with a confidence score, a REST API, a web UI, request
+logging, Docker support, and a test suite.
 
----
-
-## 🎥 Demo Video
-
-https://github.com/user-attachments/assets/37ff747c-14e6-479f-bef9-af3f625d63c9
+**Categories:** `Login Issue` · `Payment` · `Account` · `Delivery` · `Technical Issue` · `Others`
 
 ---
 
-## 📑 Table of Contents
+## Table of Contents
 
-- [What it does](#what-it-does)
-- [Tech Stack](#tech-stack)
+- [Features](#features)
+- [Workflow](#workflow)
+- [Approach](#approach)
 - [Project Structure](#project-structure)
-- [Architecture](#architecture)
-- [Screenshots](#screenshots)
-- [Agent Flow](#agent-flow)
 - [Setup](#setup)
 - [Usage](#usage)
-- [Test Queries](#test-queries)
+- [Screenshot](#screenshot)
+- [Sample Input / Output](#sample-input--output)
 - [Logging](#logging)
-- [Exception Handling](#exception-handling)
-- [Cost](#cost)
-- [Potential Improvements](#potential-improvements)
-- [Author](#author)
+- [Docker](#docker)
+- [Tests](#tests)
+- [Assumptions](#assumptions)
+- [Limitations](#limitations)
 
 ---
 
-## What it does
+## Features
 
-A customer submits a support ticket → the system automatically:
-
-1. **Classifies** it (category, priority, sentiment) using Groq
-2. **Searches** a FAQ knowledge base using ChromaDB (RAG)
-3. **Looks up order status** if an order ID is mentioned
-4. **Drafts a reply** using NVIDIA Nemotron via OpenRouter
-5. **Routes** it — confidence ≥ 0.80 → auto-reply, else retry up to 2 times → escalate to human
-
-Human agents only see the hard cases. The easy 80% is handled automatically.
+- LLM-based classification (Groq, `llama-3.3-70b-versatile`) into 6 fixed categories
+- Confidence score returned with every classification
+- Low-confidence guard: anything below `0.6` is reported as `Others` rather than a
+  shaky guess
+- REST API (`FastAPI`) — `POST /classify`, `GET /health`
+- Minimal web UI — no build step, just static HTML/CSS/JS
+- Every request logged to `logs/classifications.log` (input + output)
+- Fails safe: a broken/unavailable LLM call never crashes a request — it degrades to
+  `Others` with `0.0` confidence
+- Dockerfile for containerized deployment
+- Unit + API test suite (LLM mocked, runs fully offline)
 
 ---
 
-## Tech Stack
+## Workflow
 
-| Layer | Tool |
-|---|---|
-| Agent orchestration | LangGraph (StateGraph) |
-| Classifier | Groq — `llama-3.3-70b-versatile` |
-| Reply drafting | OpenRouter — `nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free` |
-| RAG / Vector DB | ChromaDB (local) |
-| API | FastAPI |
-| Database | SQLite |
-| Frontend | Vanilla HTML/JS dashboard |
+```mermaid
+flowchart TD
+    A["Client (Web UI or HTTP)"] -->|"POST /classify {text}"| B["FastAPI /classify endpoint"]
+    B --> C{"Text empty or<br/>whitespace only?"}
+    C -->|Yes| F["category = Others<br/>confidence = 0.0"]
+    C -->|No| D["Groq LLM: classify_ticket()"]
+    D --> E{"Valid category AND<br/>confidence >= 0.6?"}
+    E -->|No| F
+    E -->|Yes| G["Keep returned<br/>category + confidence"]
+    F --> H["Append entry to<br/>logs/classifications.log"]
+    G --> H
+    H --> I["JSON response:<br/>category, confidence"]
+    I --> A
+```
+
+---
+
+## Approach
+
+I used an **LLM API (Groq)** rather than rule-based logic or a locally trained model:
+
+- **Accuracy on open-ended text.** Support tickets are free-form natural language.
+  Keyword rules break down quickly ("payment was deducted twice" vs. "how do I make a
+  payment" need different handling), and a traditional ML model would need a labelled
+  training set that doesn't exist here.
+- **Zero training data required.** An LLM can classify well from category names and a
+  short guideline in the prompt alone (zero-shot), which fits a 6-category,
+  no-dataset problem like this one much better than training a classifier from scratch.
+- **Groq specifically**: free tier, extremely fast (LPU inference), and
+  OpenAI-compatible, so swapping to another provider later is a one-line change.
+
+**How it works** ([app/classifier.py](app/classifier.py)):
+1. The ticket text is sent to Groq with a system prompt that lists the 6 categories,
+   a one-line guideline per category, and asks for a strict JSON response:
+   `{"category": ..., "confidence": ...}`.
+2. If the returned category isn't one of the 6 valid ones, it's coerced to `Others`.
+3. **Bonus rule applied:** if `confidence < 0.6`, the category is forced to `Others`
+   regardless of what the model returned, since a low-confidence guess is better
+   reported as unclassified than as a wrong specific category.
+4. If the API call fails, times out, or returns unparsable output, the function
+   fails safe and returns `{"category": "Others", "confidence": 0.0}` instead of
+   crashing the request.
+5. The API layer ([app/main.py](app/main.py)) logs the input and outcome of every
+   request to `logs/classifications.log`.
 
 ---
 
 ## Project Structure
 
 ```
-supportpilot/
-├── orchestrator/
-│   ├── agent.py          # LangGraph StateGraph — 8 nodes, retry loop, routing
-│   └── state.py          # TicketState TypedDict — shared memory across all nodes
-│
-├── tools/
-│   ├── classify_ticket.py    # Tool 1 — Groq classifier (category, priority, sentiment)
-│   ├── search_kb.py          # Tool 2 — ChromaDB RAG retrieval
-│   ├── get_order_status.py   # Tool 3 — Mock order lookup (ORD-XXXX pattern)
-│   ├── draft_reply.py        # Tool 4 — OpenRouter reply drafter + confidence score
-│   └── send_reply.py         # Tool 5 — SQLite persistence + simulated email
-│
-├── knowledge_base/
-│   ├── faqs.json         # 50 FAQ entries across 10 categories
-│   └── ingest.py         # One-time script to load FAQs into ChromaDB
-│
-├── api/
-│   ├── routes.py         # FastAPI endpoints (POST /ticket, GET /tickets, GET /ticket/:id)
-│   └── models.py         # Pydantic request/response schemas
-│
-├── dashboard/
-│   └── index.html        # Web UI — ticket submission form + live dashboard
-│
+.
+├── app/
+│   ├── main.py             # FastAPI app — REST endpoints + serves the web UI
+│   ├── classifier.py       # LLM call, prompt, confidence threshold logic
+│   ├── schemas.py          # Pydantic request/response models + category list
+│   └── logging_config.py   # File logger — writes to logs/classifications.log
+├── static/
+│   └── index.html          # Web UI (plain HTML/CSS/JS, no build step)
+├── tests/
+│   ├── test_classifier.py  # Unit tests for classification logic (LLM mocked)
+│   └── test_api.py         # API tests via FastAPI TestClient (classifier mocked)
 ├── logs/
-│   └── supportpilot.log  # Rotating log file (5MB × 3 backups)
-│
-├── logger.py             # Centralised logger — colour console + file rotation
-├── exceptions.py         # Custom exception hierarchy (12 specific error types)
-├── main.py               # FastAPI app entry point
-├── .env.example          # Environment variable template
-└── requirements.txt      # Python dependencies
-```
-
----
-
-## Architecture
-
-![SupportPilot Architecture](/docs/architecture.png)
-
----
-
-## Screenshots
-
-### Dashboard
-
-![SupportPilot Dashboard](/docs/dashboard.png)
-
-### Ticket Submission
-
-![Submit a support ticket](/docs/submit_a_support_ticket.png)
-
-### Escalated Ticket
-
-![Escalated ticket view](/docs/Escalated.png)
-
----
-
-## Agent Flow
-
-```
-Ticket (POST /api/ticket)
-        ↓
-[Node 1] classify      →  Groq: category + priority + sentiment
-        ↓
-[Node 2] search_kb     →  ChromaDB: top-3 relevant FAQ chunks (RAG)
-        ↓
-[Node 3] get_order     →  Mock API: order status if ORD-XXXX found in body
-        ↓
-[Node 4] draft         →  OpenRouter Nemotron: reply text + confidence score
-        ↓
-   confidence >= 0.80?
-   ├── YES → [resolve] → auto-reply sent → [send] → SQLite saved
-   ├── NO + retries left → [retry] → back to draft (max 2 retries)
-   └── NO + exhausted → [escalate] → human queue + reason logged → [send]
+│   └── classifications.log # Auto-created — one line per request (input + output)
+├── Dockerfile
+├── requirements.txt
+├── requirements-dev.txt    # requirements.txt + pytest/httpx for testing
+└── .env.example
 ```
 
 ---
 
 ## Setup
 
-### 1. Clone the repo
-
-```bash
-git clone https://github.com/Inder-26/supportpilot.git
-cd supportpilot
-```
-
-### 2. Create a virtual environment
+### 1. Create a virtual environment
 
 ```bash
 python -m venv venv
@@ -159,51 +129,37 @@ venv\Scripts\activate
 source venv/bin/activate
 ```
 
-### 3. Install dependencies
+### 2. Install dependencies
 
 ```bash
 pip install -r requirements.txt
+# or, to also run the tests:
+pip install -r requirements-dev.txt
 ```
 
-### 4. Configure environment variables
+### 3. Configure your API key
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` and fill in your API keys:
+Edit `.env`:
 
 ```env
 GROQ_API_KEY=your_groq_api_key_here
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-
 GROQ_MODEL=llama-3.3-70b-versatile
-OPENROUTER_MODEL=nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free
-
-CONFIDENCE_THRESHOLD=0.80
-MAX_RETRIES=2
-LOG_LEVEL=INFO
+CONFIDENCE_THRESHOLD=0.6
 ```
 
-Get your keys:
-- Groq: https://console.groq.com
-- OpenRouter: https://openrouter.ai
+Get a free key at [console.groq.com](https://console.groq.com).
 
-### 5. Ingest the knowledge base
+### 4. Run the server
 
 ```bash
-python knowledge_base/ingest.py
+uvicorn app.main:app --reload --port 8000
 ```
 
-This loads `faqs.json` into ChromaDB. Run this once before starting the server, and again any time you update `faqs.json`.
-
-### 6. Start the server
-
-```bash
-uvicorn main:app --reload --port 8000
-```
-
-Open http://localhost:8000 in your browser.
+Open http://localhost:8000 for the web UI.
 
 ---
 
@@ -211,123 +167,114 @@ Open http://localhost:8000 in your browser.
 
 ### Web UI
 
-Open http://localhost:8000 — use the **Submit Ticket** tab to submit tickets and the **Dashboard** tab to view results.
+Go to http://localhost:8000, type or paste a ticket, then click **Classify**
+(or `Ctrl`/`Cmd` + `Enter`, or click one of the example chips).
 
-### API (PowerShell)
-
-```powershell
-$body = '{"customer_email":"user@example.com","subject":"Where is my order ORD-1002?","body":"I placed order ORD-1002 three days ago and have not received any update.","source":"form"}'
-Invoke-WebRequest -Uri "http://localhost:8000/api/ticket" -Method POST -ContentType "application/json" -Body $body
-```
-
-### API (curl)
-
-```bash
-curl -X POST http://localhost:8000/api/ticket \
-  -H "Content-Type: application/json" \
-  -d '{
-    "customer_email": "user@example.com",
-    "subject": "Where is my order ORD-1002?",
-    "body": "I placed order ORD-1002 three days ago and have not received any update.",
-    "source": "form"
-  }'
-```
-
-### API Endpoints
+### REST API
 
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/ticket` | Submit a new ticket |
-| GET | `/api/tickets` | List all tickets (filter by status, priority) |
-| GET | `/api/ticket/:id` | Get full detail for one ticket including AI reply |
-| GET | `/health` | Health check |
+| POST | `/classify` | Classify a ticket. Body: `{"text": "..."}` |
+| GET | `/health` | Health check — `{"status": "ok"}` |
+
+```bash
+curl -X POST http://localhost:8000/classify \
+  -H "Content-Type: application/json" \
+  -d '{"text": "I cannot login to my account."}'
+```
+
+```json
+{"category": "Login Issue", "confidence": 0.9}
+```
 
 ---
 
-## Test Queries
+## Screenshot
 
-Try these to see different behaviours:
+![Support Ticket Classifier web UI](docs/screenshot.png)
 
-**Resolves with order data (0.90–0.95 confidence):**
-- Subject: `Where is my order ORD-1002?` / Body: `I placed order ORD-1002 three days ago and have not received any update.`
+---
 
-**Resolves from KB (0.80–0.90 confidence):**
-- Subject: `How do I reset my password?` / Body: `I forgot my password and can't log into my account.`
-- Subject: `I was charged twice` / Body: `My bank statement shows two charges for the same order.`
-- Subject: `When will my parcel arrive?` / Body: `It has been two weeks since I placed the order.`
+## Sample Input / Output
 
-**Tests escalation path:**
-- Subject: `This is completely unacceptable` / Body: `I am very angry and want to speak to a manager right now.`
+Verified against the live Groq API:
+
+| Input | Category | Confidence |
+|---|---|---|
+| "I cannot login to my account." | Login Issue | 0.90 |
+| "Payment was deducted twice." | Payment | 0.90 |
+| "How can I change my password?" | Account | 0.90 |
+| "My order hasn't arrived." | Delivery | 0.90 |
+| "App crashes after opening." | Technical Issue | 0.90 |
 
 ---
 
 ## Logging
 
-All logs go to:
-- **Terminal** — colour-coded by level (green=INFO, yellow=WARNING, red=ERROR)
-- **`logs/supportpilot.log`** — rotating file, 5MB per file, 3 backups kept
+Every call to `/classify` is appended as one line to `logs/classifications.log`
+(auto-created on first run), recording the input text and the resulting category
+and confidence:
 
-Filter logs for a specific ticket:
+```
+2026-07-14 22:04:29,301 | INPUT="Payment was deducted twice." | OUTPUT=category=Payment confidence=0.9
+```
 
-```powershell
-# Windows
-Select-String -Path "logs\supportpilot.log" -Pattern "TKT-XXXXXXXX"
+Failed requests (e.g. missing API key) are logged with `ERROR=...` instead of `OUTPUT=...`.
+In Docker, mount a volume (e.g. `-v $(pwd)/logs:/app/logs`) if you want logs to
+persist outside the container.
 
-# Mac/Linux
-grep "TKT-XXXXXXXX" logs/supportpilot.log
+---
+
+## Docker
+
+```bash
+docker build -t ticket-classifier .
+docker run -p 8000:8000 --env-file .env ticket-classifier
+```
+
+To persist logs on the host:
+
+```bash
+docker run -p 8000:8000 --env-file .env -v "$(pwd)/logs:/app/logs" ticket-classifier
 ```
 
 ---
 
-## Exception Handling
+## Tests
 
-Custom exception hierarchy in `exceptions.py`:
-
-```
-SupportPilotError (base)
-├── GroqAPIError
-├── GeminiAPIError          (reused for OpenRouter errors)
-├── ModelTimeoutError
-├── InvalidModelResponseError
-├── KnowledgeBaseError
-│   ├── KnowledgeBaseNotInitialisedError
-│   └── NoRelevantChunksError
-├── TicketValidationError
-├── ClassificationError
-├── ResolutionError
-├── EscalationError
-├── DatabaseError
-└── ConfigurationError
+```bash
+pytest
 ```
 
-Every tool raises specific exceptions. Nodes in `agent.py` catch them, log them to `TicketState.error_log`, and continue gracefully rather than crashing the pipeline.
+Tests mock the LLM call, so they run offline with no API key required and cover:
+- Empty/whitespace input → `Others`
+- Valid category + high confidence → kept as-is
+- Confidence below 0.6 → downgraded to `Others`
+- Category outside the fixed list → coerced to `Others`
+- LLM/API failure → fails safe to `Others` instead of raising
+- API endpoints (`/health`, `/classify`) including validation and error responses
 
 ---
 
-## Cost
+## Assumptions
 
-| Component | Cost |
-|---|---|
-| Groq (classifier) | Free tier — 6,000 requests/day |
-| OpenRouter Nemotron | Free tier |
-| ChromaDB | Free — runs locally |
-| **Total for this project** | **$0** |
+- One ticket is classified into exactly one category — no multi-label classification.
+- The 6 categories given in the assignment are treated as fixed and exhaustive;
+  anything not clearly matching one of the first 5 falls into `Others`.
+- A single free-text `text` field is sufficient input (no separate subject/body,
+  customer metadata, or attachments to consider).
+- Groq's free tier is an acceptable dependency for this exercise; no offline/local
+  model requirement was implied by the assignment.
 
----
+## Limitations
 
-## Potential Improvements
-
-- [ ] Real email sending via SendGrid or Gmail API
-- [ ] Human agent close/resolve button on escalated tickets
-- [ ] Swap ChromaDB for Qdrant Cloud for production scale
-- [ ] Add authentication to the API
-- [ ] Replace mock order API with real Shopify/WooCommerce integration
-- [ ] Add more FAQ entries or connect to a live CMS
-
----
-
-## Author
-
-**Inderjeet Singh**  
-AI Intern — Experiences Digital  
-GitHub: [Inder-26](https://github.com/Inder-26)
+- Requires network access and a valid `GROQ_API_KEY`; without it, every ticket
+  falls back to `Others` with confidence `0.0` rather than raising an error.
+- No persistence beyond the log file — classifications aren't stored in a database;
+  this is a stateless classify-on-request service, not a ticketing system.
+- No authentication/rate limiting on the API — not intended for public deployment
+  as-is.
+- Confidence scores are the model's own self-reported estimate, not a calibrated
+  statistical probability — they're a useful heuristic, not a guarantee.
+- Non-English tickets or highly ambiguous/multi-issue tickets are more likely to be
+  misclassified or land in `Others`.

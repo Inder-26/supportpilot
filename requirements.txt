@@ -1,10 +1,5 @@
 fastapi
-uvicorn
-langgraph
-langchain-core
+uvicorn[standard]
 groq
-google-genai
-chromadb
-pydantic
 python-dotenv
-aiofiles
+pydantic
